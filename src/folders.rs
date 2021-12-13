@@ -36,8 +36,8 @@ struct LdapGroupMetadata {
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct RoomMetadata {
-    pub id: String,
-    pub alias: String,
+    pub id: Option<String>,
+    pub alias: Option<String>,
     extra_aliases: Vec<String>,
     visibility: String,
     ldap_groups: Vec<LdapGroupMetadata>,
@@ -90,9 +90,9 @@ impl SpaceFolder {
                         let contents = std::fs::read_to_string(entry.path())?;
                         let mut metadata: RoomMetadata = serde_yaml::from_str(&contents)?;
                         if file_name.starts_with('!') {
-                            metadata.id = file_name.to_string();
+                            metadata.id = Some(file_name.to_string());
                         } else {
-                            metadata.alias = file_name.to_string();
+                            metadata.alias = Some(file_name.to_string());
                         }
                         space_folder.rooms.push(metadata);
                     } else {
@@ -139,6 +139,10 @@ impl SpaceFolder {
     pub fn check(&self) -> Result<()> {
         if self.metadata.is_none() {
             return Err(eyre!("Folder should contain a metadata.yml"));
+        }
+
+        if self.metadata.as_ref().unwrap().id.is_none() && self.metadata.as_ref().unwrap().alias.is_none() {
+            return Err(eyre!("Folder should have a room ID or alias defined in metadata.yml"));
         }
 
         let check_user = |mxid: &str| {
@@ -213,7 +217,7 @@ impl SpaceFolder {
         mx_server_name: &str,
         synapse_external_ids: Option<&'async_recursion Vec<config::ExternalId>>,
     ) -> Result<()> {
-        info!("Fetching users for room {} {}", self.metadata.as_ref().unwrap().id, self.metadata.as_ref().unwrap().alias);
+        info!("Fetching users for room {} {}", self.metadata.as_ref().unwrap().id.as_ref().unwrap_or(&String::new()), self.metadata.as_ref().unwrap().alias.as_ref().unwrap_or(&String::new()));
         let mut users = HashSet::new();
         for group in &self.metadata.as_ref().unwrap().ldap_groups {
             users.extend(
@@ -230,7 +234,7 @@ impl SpaceFolder {
         self.metadata.as_mut().unwrap().users.extend(users);
 
         for room in &mut self.rooms {
-            info!("Fetching users for room {} {}", room.id, room.alias);
+            info!("Fetching users for room {} {}", room.id.as_ref().unwrap_or(&String::new()), room.alias.as_ref().unwrap_or(&String::new()));
             for group in &room.ldap_groups {
                 room.users.extend(
                     SpaceFolder::get_users_metadatas_for_group(
