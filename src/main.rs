@@ -76,8 +76,8 @@ async fn main() -> Result<()> {
     }
 
     info!("Processing spaces and rooms.");
-    for mut folder in space_folders {
-        folder.folders_to_matrix(matrix_client).await?;
+    for folder in space_folders {
+        folder.folders_to_matrix(matrix_client, None).await?;
     }
 
     Ok(())

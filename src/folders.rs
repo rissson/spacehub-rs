@@ -163,7 +163,13 @@ impl SpaceFolder {
     }
 
     // TODO: this should be moved to LdapGroupMetadata
-    async fn get_users_metadatas_for_group(group: &LdapGroupMetadata, ldap_client: &mut LdapClient, localpart_template: &str, mx_server_name: &str, synapse_external_ids: Option<&Vec<config::ExternalId>>) -> Result<HashSet<UserMetadata>> {
+    async fn get_users_metadatas_for_group(
+        group: &LdapGroupMetadata,
+        ldap_client: &mut LdapClient,
+        localpart_template: &str,
+        mx_server_name: &str,
+        synapse_external_ids: Option<&Vec<config::ExternalId>>,
+    ) -> Result<HashSet<UserMetadata>> {
         let mut users_metadatas = HashSet::new();
         let users = ldap_client.get_users_in_group(&group.dn).await?;
         for user in users {
@@ -178,7 +184,11 @@ impl SpaceFolder {
             if synapse_external_ids.is_some() {
                 for external_id in synapse_external_ids.unwrap() {
                     env.add_template("external_id", &external_id.external_id_template)?;
-                    let ext_id = env.get_template("external_id").unwrap().render(&ctx).unwrap();
+                    let ext_id = env
+                        .get_template("external_id")
+                        .unwrap()
+                        .render(&ctx)
+                        .unwrap();
                     external_ids.push(ExternalId {
                         auth_provider: external_id.auth_provider.clone(),
                         external_id: ext_id,
@@ -191,12 +201,10 @@ impl SpaceFolder {
                 power_level: group.power_level,
                 external_ids,
             });
-
         }
         Ok(users_metadatas)
     }
 
-    // TODO: do this for folders too
     #[async_recursion]
     pub async fn populate_rooms_users(
         &mut self,
@@ -205,22 +213,46 @@ impl SpaceFolder {
         mx_server_name: &str,
         synapse_external_ids: Option<&'async_recursion Vec<config::ExternalId>>,
     ) -> Result<()> {
+        info!("Fetching users for room {} {}", self.metadata.as_ref().unwrap().id, self.metadata.as_ref().unwrap().alias);
         let mut users = HashSet::new();
         for group in &self.metadata.as_ref().unwrap().ldap_groups {
-            users.extend(SpaceFolder::get_users_metadatas_for_group(&group, ldap_client, localpart_template, mx_server_name, synapse_external_ids).await?);
+            users.extend(
+                SpaceFolder::get_users_metadatas_for_group(
+                    &group,
+                    ldap_client,
+                    localpart_template,
+                    mx_server_name,
+                    synapse_external_ids,
+                )
+                .await?,
+            );
         }
         self.metadata.as_mut().unwrap().users.extend(users);
 
         for room in &mut self.rooms {
             info!("Fetching users for room {} {}", room.id, room.alias);
             for group in &room.ldap_groups {
-                room.users.extend(SpaceFolder::get_users_metadatas_for_group(group, ldap_client, localpart_template, mx_server_name, synapse_external_ids).await?);
+                room.users.extend(
+                    SpaceFolder::get_users_metadatas_for_group(
+                        group,
+                        ldap_client,
+                        localpart_template,
+                        mx_server_name,
+                        synapse_external_ids,
+                    )
+                    .await?,
+                );
             }
         }
 
         for child in &mut self.children {
             child
-                .populate_rooms_users(ldap_client, localpart_template, mx_server_name, synapse_external_ids)
+                .populate_rooms_users(
+                    ldap_client,
+                    localpart_template,
+                    mx_server_name,
+                    synapse_external_ids,
+                )
                 .await?;
         }
 
@@ -235,18 +267,16 @@ impl SpaceFolder {
             acc
         });
 
-        self.children
-            .iter()
-            .fold(users, |mut acc, child| {
-                acc.extend(child.get_all_users());
-                acc
-            })
+        self.children.iter().fold(users, |mut acc, child| {
+            acc.extend(child.get_all_users());
+            acc
+        })
     }
 
     #[async_recursion]
-    pub async fn folders_to_matrix(&mut self, matrix_client: &MatrixClient) -> Result<()> {
-        for child in &mut self.children {
-            child.folders_to_matrix(matrix_client).await?;
+    pub async fn folders_to_matrix(&self, matrix_client: &MatrixClient, parent: Option<&SpaceFolder>) -> Result<()> {
+        for child in &self.children {
+            child.folders_to_matrix(matrix_client, Some(self)).await?;
         }
         Ok(())
     }

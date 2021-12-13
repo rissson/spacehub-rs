@@ -1,8 +1,6 @@
-use crate::folders::UserMetadata;
 use crate::config::MatrixConfig;
+use crate::folders::UserMetadata;
 use color_eyre::eyre::{ErrReport, Result};
-use std::convert::TryFrom;
-use tracing::*;
 use matrix_sdk::{
     ruma::{
         api::{
@@ -13,7 +11,9 @@ use matrix_sdk::{
     },
     Client, ClientConfig, HttpError, RequestConfig,
 };
+use std::convert::TryFrom;
 use synapse_admin_api::users as synapse_users;
+use tracing::*;
 
 pub struct MatrixClient {
     client: Client,
@@ -57,17 +57,20 @@ impl MatrixClient {
     pub async fn create_user_if_missing(&self, user: &UserMetadata) -> Result<()> {
         let user_id = UserId::try_from(user.mxid.clone())?;
         if self.user_exists(&user_id).await? {
-            return Ok(())
+            return Ok(());
         }
 
         info!("Creating user {}", user.mxid);
-        let mut register_request = synapse_users::create_or_modify::v2::Request::new(&user_id, None);
+        let mut register_request =
+            synapse_users::create_or_modify::v2::Request::new(&user_id, None);
         register_request.external_ids = Some(vec![]);
         for external_id in &user.external_ids {
-            register_request.external_ids.as_mut().unwrap().push(synapse_admin_api::users::create_or_modify::v2::ExternalId {
-                auth_provider: external_id.auth_provider.clone(),
-                external_id: external_id.external_id.clone(),
-            })
+            register_request.external_ids.as_mut().unwrap().push(
+                synapse_admin_api::users::create_or_modify::v2::ExternalId {
+                    auth_provider: external_id.auth_provider.clone(),
+                    external_id: external_id.external_id.clone(),
+                },
+            )
         }
         let _created_user = self.client.send(register_request, None).await?;
 
