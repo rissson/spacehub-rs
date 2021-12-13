@@ -4,29 +4,20 @@ version = "0.1.0"
 authors = ["MTRNord <mtrnord1@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-url = "2.1.1"
-serde = "1.0"
-serde_yaml = "0.8.13"
-serde_json = "1"
-tokio = {version = "0.2", features = ["full"]}
-color-eyre = "0.5"
-async-trait = "0.1.41"
-tracing = "0.1"
-tracing-subscriber = "0.2"
-tracing-futures = "0.2.4"
-clap = "3.0.0-beta.2"
-walkdir = "2"
-
-[dependencies.ruma]
-#path = "../../ruma/ruma"
-git = "https://github.com/matrix-spaces-generator/ruma"
-branch = "MTRNord/spaces"
-features = ["client-api", "unstable-exhaustive-types"]
-
-[dependencies.ruma-client]
-#path = "../../ruma/ruma-client"
-git = "https://github.com/matrix-spaces-generator/ruma"
-branch = "MTRNord/spaces"
+async-recursion = "*"
+clap = {version = "3.0.0-rc.4", features = ["derive"]}
+color-eyre = "*"
+git2 = "*"
+ldap3 = "*"
+matrix-sdk = { git = "https://github.com/rissson/matrix-rust-sdk.git", branch = "matrix-sdk-0.4" }
+minijinja = "*"
+serde = "*"
+serde_json = "*"
+serde_yaml = "*"
+synapse-admin-api = { git = "https://github.com/rissson/synapse-admin-api", branch = "users-create-modify-external-ids", features = ["client"] }
+tempdir = "*"
+tokio = { version = "*", features = ["full"] }
+tracing = "*"
+tracing-subscriber = { version = "*", features = ["json"] }
+url = "*"
