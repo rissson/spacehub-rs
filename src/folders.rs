@@ -137,7 +137,6 @@ impl RoomMetadata {
                 room_id = matrix_client
                     .create_room(
                         self.alias.as_ref().unwrap(),
-                        &self.extra_aliases,
                         &self.visibility,
                         self.is_space,
                         parent,
@@ -146,8 +145,47 @@ impl RoomMetadata {
             }
         }
 
+        matrix_client
+            .update_room(&room_id, &self.extra_aliases, &self.visibility, parent)
+            .await?;
+
         // Find what users we need to add, remove, and update the power level
         let current_users = matrix_client.get_room_members(&room_id).await?;
+        let mut users_to_add = HashSet::new();
+        let mut users_to_remove = HashSet::new();
+
+        for user in &self.users {
+            if !current_users.contains(&user.mxid) {
+                users_to_add.insert(user);
+            }
+        }
+
+        for user_id in &current_users {
+            if !(&self.users)
+                .iter()
+                .map(|e| e.mxid.clone())
+                .collect::<HashSet<String>>()
+                .contains(user_id)
+            {
+                users_to_remove.insert(user_id);
+            }
+        }
+
+        for user in &users_to_add {
+            matrix_client
+                .add_user_to_room(&room_id, &user.mxid, user.power_level)
+                .await?;
+        }
+        for user_id in &users_to_remove {
+            matrix_client
+                .remove_user_from_room(&room_id, user_id)
+                .await?;
+        }
+        for user in &self.users {
+            matrix_client
+                .set_user_powerlevel(&room_id, &user.mxid, user.power_level)
+                .await?;
+        }
 
         Ok(room_id.clone())
     }

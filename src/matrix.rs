@@ -37,7 +37,7 @@ impl MatrixClient {
     }
 
     async fn user_exists(&self, user_id: &UserId) -> Result<bool> {
-        let profile_request = profile::get_profile::Request::new(&user_id);
+        let profile_request = profile::get_profile::Request::new(user_id);
 
         let profile = match self
             .client
@@ -88,12 +88,21 @@ impl MatrixClient {
     pub async fn create_room(
         &self,
         alias: &str,
-        extra_aliases: &Vec<String>,
         visibility: &str,
         is_space: bool,
         parent: Option<&str>,
     ) -> Result<String> {
         todo!()
+    }
+
+    pub async fn update_room(
+        &self,
+        room_id: &str,
+        extra_aliases: &[String],
+        visibility: &str,
+        parent: Option<&str>,
+    ) -> Result<()> {
+        todo!();
     }
 
     pub async fn get_room_members(&self, room_id: &str) -> Result<Vec<String>> {
@@ -103,8 +112,8 @@ impl MatrixClient {
     pub async fn add_user_to_room(
         &self,
         room_id: &str,
-        user: &str,
-        power_level: i64,
+        user_id: &str,
+        power_level: i32,
     ) -> Result<()> {
         todo!();
     }
@@ -112,13 +121,13 @@ impl MatrixClient {
     pub async fn set_user_powerlevel(
         &self,
         room_id: &str,
-        user: &str,
-        power_level: i64,
+        user_id: &str,
+        power_level: i32,
     ) -> Result<()> {
         todo!();
     }
 
-    pub async fn remove_user_from_room(&self, room_id: &str, user: &str) -> Result<()> {
+    pub async fn remove_user_from_room(&self, room_id: &str, user_id: &str) -> Result<()> {
         todo!();
     }
 
