@@ -45,18 +45,6 @@ pub struct RoomMetadata {
     users: HashSet<UserMetadata>,
 }
 
-impl RoomMetadata {
-    // It is actually used to get default values for metadatas
-    #[allow(dead_code)]
-    fn default() -> Self {
-        let default = std::default::Default::default();
-        Self {
-            visibility: "private".to_string(),
-            ..default
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct SpaceFolder {
     metadata: Option<RoomMetadata>,
@@ -68,6 +56,64 @@ fn walkdir(path: &Path) -> Result<Box<dyn Iterator<Item = std::fs::DirEntry>>> {
     Ok(Box::new(fs::read_dir(path)?.filter_map(|e| e.ok()).filter(
         |e| !e.file_name().to_str().unwrap_or(".").starts_with('.'),
     )))
+}
+
+impl LdapGroupMetadata {
+    async fn get_users_metadatas_for_group(
+        &self,
+        ldap_client: &mut LdapClient,
+        localpart_template: &str,
+        mx_server_name: &str,
+        synapse_external_ids: Option<&Vec<config::ExternalId>>,
+    ) -> Result<HashSet<UserMetadata>> {
+        let mut users_metadatas = HashSet::new();
+
+        let users = ldap_client.get_users_in_group(&self.dn).await?;
+        for user in users {
+            let mut env = minijinja::Environment::new();
+            let template = format!("@{}:{}", localpart_template, mx_server_name);
+            env.add_template("mxid", &template)?;
+            let mut ctx = BTreeMap::new();
+            ctx.insert("user", user);
+            let mxid = env.get_template("mxid").unwrap().render(&ctx).unwrap();
+
+            let mut external_ids = vec![];
+            if synapse_external_ids.is_some() {
+                for external_id in synapse_external_ids.unwrap() {
+                    env.add_template("external_id", &external_id.external_id_template)?;
+                    let ext_id = env
+                        .get_template("external_id")
+                        .unwrap()
+                        .render(&ctx)
+                        .unwrap();
+                    external_ids.push(ExternalId {
+                        auth_provider: external_id.auth_provider.clone(),
+                        external_id: ext_id,
+                    });
+                }
+            }
+
+            users_metadatas.insert(UserMetadata {
+                mxid,
+                power_level: self.power_level,
+                external_ids,
+            });
+        }
+
+        Ok(users_metadatas)
+    }
+}
+
+impl RoomMetadata {
+    // It is actually used to get default values for metadatas
+    #[allow(dead_code)]
+    fn default() -> Self {
+        let default = std::default::Default::default();
+        Self {
+            visibility: "private".to_string(),
+            ..default
+        }
+    }
 }
 
 impl SpaceFolder {
@@ -141,8 +187,12 @@ impl SpaceFolder {
             return Err(eyre!("Folder should contain a metadata.yml"));
         }
 
-        if self.metadata.as_ref().unwrap().id.is_none() && self.metadata.as_ref().unwrap().alias.is_none() {
-            return Err(eyre!("Folder should have a room ID or alias defined in metadata.yml"));
+        if self.metadata.as_ref().unwrap().id.is_none()
+            && self.metadata.as_ref().unwrap().alias.is_none()
+        {
+            return Err(eyre!(
+                "Folder should have a room ID or alias defined in metadata.yml"
+            ));
         }
 
         let check_user = |mxid: &str| {
@@ -166,49 +216,6 @@ impl SpaceFolder {
         Ok(())
     }
 
-    // TODO: this should be moved to LdapGroupMetadata
-    async fn get_users_metadatas_for_group(
-        group: &LdapGroupMetadata,
-        ldap_client: &mut LdapClient,
-        localpart_template: &str,
-        mx_server_name: &str,
-        synapse_external_ids: Option<&Vec<config::ExternalId>>,
-    ) -> Result<HashSet<UserMetadata>> {
-        let mut users_metadatas = HashSet::new();
-        let users = ldap_client.get_users_in_group(&group.dn).await?;
-        for user in users {
-            let mut env = minijinja::Environment::new();
-            let template = format!("@{}:{}", localpart_template, mx_server_name);
-            env.add_template("mxid", &template)?;
-            let mut ctx = BTreeMap::new();
-            ctx.insert("user", user);
-            let mxid = env.get_template("mxid").unwrap().render(&ctx).unwrap();
-
-            let mut external_ids = vec![];
-            if synapse_external_ids.is_some() {
-                for external_id in synapse_external_ids.unwrap() {
-                    env.add_template("external_id", &external_id.external_id_template)?;
-                    let ext_id = env
-                        .get_template("external_id")
-                        .unwrap()
-                        .render(&ctx)
-                        .unwrap();
-                    external_ids.push(ExternalId {
-                        auth_provider: external_id.auth_provider.clone(),
-                        external_id: ext_id,
-                    });
-                }
-            }
-
-            users_metadatas.insert(UserMetadata {
-                mxid,
-                power_level: group.power_level,
-                external_ids,
-            });
-        }
-        Ok(users_metadatas)
-    }
-
     #[async_recursion]
     pub async fn populate_rooms_users(
         &mut self,
@@ -217,12 +224,26 @@ impl SpaceFolder {
         mx_server_name: &str,
         synapse_external_ids: Option<&'async_recursion Vec<config::ExternalId>>,
     ) -> Result<()> {
-        info!("Fetching users for room {} {}", self.metadata.as_ref().unwrap().id.as_ref().unwrap_or(&String::new()), self.metadata.as_ref().unwrap().alias.as_ref().unwrap_or(&String::new()));
+        info!(
+            "Fetching users for room {} {}",
+            self.metadata
+                .as_ref()
+                .unwrap()
+                .id
+                .as_ref()
+                .unwrap_or(&String::new()),
+            self.metadata
+                .as_ref()
+                .unwrap()
+                .alias
+                .as_ref()
+                .unwrap_or(&String::new())
+        );
+
         let mut users = HashSet::new();
         for group in &self.metadata.as_ref().unwrap().ldap_groups {
             users.extend(
-                SpaceFolder::get_users_metadatas_for_group(
-                    &group,
+                group.get_users_metadatas_for_group(
                     ldap_client,
                     localpart_template,
                     mx_server_name,
@@ -234,11 +255,14 @@ impl SpaceFolder {
         self.metadata.as_mut().unwrap().users.extend(users);
 
         for room in &mut self.rooms {
-            info!("Fetching users for room {} {}", room.id.as_ref().unwrap_or(&String::new()), room.alias.as_ref().unwrap_or(&String::new()));
+            info!(
+                "Fetching users for room {} {}",
+                room.id.as_ref().unwrap_or(&String::new()),
+                room.alias.as_ref().unwrap_or(&String::new())
+            );
             for group in &room.ldap_groups {
                 room.users.extend(
-                    SpaceFolder::get_users_metadatas_for_group(
-                        group,
+                    group.get_users_metadatas_for_group(
                         ldap_client,
                         localpart_template,
                         mx_server_name,
@@ -278,9 +302,16 @@ impl SpaceFolder {
     }
 
     #[async_recursion]
-    pub async fn folders_to_matrix(&self, matrix_client: &MatrixClient, parent: Option<&SpaceFolder>) -> Result<()> {
+    pub async fn folders_to_matrix(
+        &self,
+        matrix_client: &MatrixClient,
+        parent: Option<&str>,
+    ) -> Result<()> {
+
+        let room_id = "";
+
         for child in &self.children {
-            child.folders_to_matrix(matrix_client, Some(self)).await?;
+            child.folders_to_matrix(matrix_client, Some(room_id)).await?;
         }
         Ok(())
     }
