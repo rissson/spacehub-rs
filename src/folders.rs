@@ -114,6 +114,14 @@ impl RoomMetadata {
             ..default
         }
     }
+
+    fn create_or_update(
+        &self,
+        parent: Option<&str>,
+        matrix_client: &MatrixClient,
+    ) -> Result<String> {
+        todo!();
+    }
 }
 
 impl SpaceFolder {
@@ -243,13 +251,14 @@ impl SpaceFolder {
         let mut users = HashSet::new();
         for group in &self.metadata.as_ref().unwrap().ldap_groups {
             users.extend(
-                group.get_users_metadatas_for_group(
-                    ldap_client,
-                    localpart_template,
-                    mx_server_name,
-                    synapse_external_ids,
-                )
-                .await?,
+                group
+                    .get_users_metadatas_for_group(
+                        ldap_client,
+                        localpart_template,
+                        mx_server_name,
+                        synapse_external_ids,
+                    )
+                    .await?,
             );
         }
         self.metadata.as_mut().unwrap().users.extend(users);
@@ -262,13 +271,14 @@ impl SpaceFolder {
             );
             for group in &room.ldap_groups {
                 room.users.extend(
-                    group.get_users_metadatas_for_group(
-                        ldap_client,
-                        localpart_template,
-                        mx_server_name,
-                        synapse_external_ids,
-                    )
-                    .await?,
+                    group
+                        .get_users_metadatas_for_group(
+                            ldap_client,
+                            localpart_template,
+                            mx_server_name,
+                            synapse_external_ids,
+                        )
+                        .await?,
                 );
             }
         }
@@ -305,14 +315,24 @@ impl SpaceFolder {
     pub async fn folders_to_matrix(
         &self,
         matrix_client: &MatrixClient,
-        parent: Option<&str>,
+        parent: Option<&'async_recursion str>,
     ) -> Result<()> {
+        let room_id = self
+            .metadata
+            .as_ref()
+            .unwrap()
+            .create_or_update(parent, matrix_client)?;
 
-        let room_id = "";
+        for room in &self.rooms {
+            let _room_id = room.create_or_update(parent, matrix_client)?;
+        }
 
         for child in &self.children {
-            child.folders_to_matrix(matrix_client, Some(room_id)).await?;
+            child
+                .folders_to_matrix(matrix_client, Some(&room_id))
+                .await?;
         }
+
         Ok(())
     }
 }
