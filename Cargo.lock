@@ -1511,9 +1511,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
+checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
 
 [[package]]
 name = "opaque-debug"
@@ -2477,7 +2477,7 @@ dependencies = [
 [[package]]
 name = "synapse-admin-api"
 version = "0.2.0"
-source = "git+https://github.com/rissson/synapse-admin-api?branch=users-create-modify-external-ids#b91af78cce3ba8b7afd1b5776b32397167b2b361"
+source = "git+https://github.com/ruma/synapse-admin-api#24de3512f13a4c9ca4c9d42f3b6591876be3d96b"
 dependencies = [
  "ruma",
  "serde",

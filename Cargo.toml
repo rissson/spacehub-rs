@@ -15,7 +15,7 @@ minijinja = "*"
 serde = "*"
 serde_json = "*"
 serde_yaml = "*"
-synapse-admin-api = { git = "https://github.com/rissson/synapse-admin-api", branch = "users-create-modify-external-ids", features = ["client"] }
+synapse-admin-api = { git = "https://github.com/ruma/synapse-admin-api", features = ["client"] }
 tempdir = "*"
 tokio = { version = "*", features = ["full"] }
 tracing = "*"

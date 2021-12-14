@@ -43,6 +43,7 @@ pub struct RoomMetadata {
     ldap_groups: Vec<LdapGroupMetadata>,
     admins: Vec<String>,
     users: HashSet<UserMetadata>,
+    is_space: bool,
 }
 
 #[derive(Debug)]
@@ -115,12 +116,40 @@ impl RoomMetadata {
         }
     }
 
-    fn create_or_update(
+    async fn create_or_update(
         &self,
         parent: Option<&str>,
         matrix_client: &MatrixClient,
     ) -> Result<String> {
-        todo!();
+        // Create the room
+        let room_id;
+        if self.id.is_some() {
+            // TODO get_room_by_id
+            room_id = self.id.as_ref().unwrap().clone();
+            let _ = matrix_client.get_room_by_id(&room_id).await?;
+        } else {
+            let _room_id = matrix_client
+                .get_room_by_alias(self.alias.as_ref().unwrap())
+                .await?;
+            if _room_id.is_some() {
+                room_id = _room_id.unwrap();
+            } else {
+                room_id = matrix_client
+                    .create_room(
+                        self.alias.as_ref().unwrap(),
+                        &self.extra_aliases,
+                        &self.visibility,
+                        self.is_space,
+                        parent,
+                    )
+                    .await?;
+            }
+        }
+
+        // Find what users we need to add, remove, and update the power level
+        let current_users = matrix_client.get_room_members(&room_id).await?;
+
+        Ok(room_id.clone())
     }
 }
 
@@ -138,7 +167,8 @@ impl SpaceFolder {
                 if let Some(file_name) = entry.file_name().to_str() {
                     if file_name == "metadata.yml" || file_name == "metadata.yaml" {
                         let contents = std::fs::read_to_string(entry.path())?;
-                        let metadata: RoomMetadata = serde_yaml::from_str(&contents)?;
+                        let mut metadata: RoomMetadata = serde_yaml::from_str(&contents)?;
+                        metadata.is_space = true;
                         space_folder.metadata = Some(metadata);
                     } else if file_name.starts_with('!') || file_name.starts_with('#') {
                         let contents = std::fs::read_to_string(entry.path())?;
@@ -321,10 +351,11 @@ impl SpaceFolder {
             .metadata
             .as_ref()
             .unwrap()
-            .create_or_update(parent, matrix_client)?;
+            .create_or_update(parent, matrix_client)
+            .await?;
 
         for room in &self.rooms {
-            let _room_id = room.create_or_update(parent, matrix_client)?;
+            let _room_id = room.create_or_update(parent, matrix_client).await?;
         }
 
         for child in &self.children {

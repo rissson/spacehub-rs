@@ -77,6 +77,51 @@ impl MatrixClient {
         Ok(())
     }
 
+    pub async fn get_room_by_id(&self, room_id: &str) -> Result<Option<String>> {
+        todo!();
+    }
+
+    pub async fn get_room_by_alias(&self, room_alias: &str) -> Result<Option<String>> {
+        todo!();
+    }
+
+    pub async fn create_room(
+        &self,
+        alias: &str,
+        extra_aliases: &Vec<String>,
+        visibility: &str,
+        is_space: bool,
+        parent: Option<&str>,
+    ) -> Result<String> {
+        todo!()
+    }
+
+    pub async fn get_room_members(&self, room_id: &str) -> Result<Vec<String>> {
+        todo!();
+    }
+
+    pub async fn add_user_to_room(
+        &self,
+        room_id: &str,
+        user: &str,
+        power_level: i64,
+    ) -> Result<()> {
+        todo!();
+    }
+
+    pub async fn set_user_powerlevel(
+        &self,
+        room_id: &str,
+        user: &str,
+        power_level: i64,
+    ) -> Result<()> {
+        todo!();
+    }
+
+    pub async fn remove_user_from_room(&self, room_id: &str, user: &str) -> Result<()> {
+        todo!();
+    }
+
     /* pub async fn create_space(
         &self,
         name: String,
