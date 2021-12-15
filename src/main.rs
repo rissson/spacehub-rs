@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
             });
 
         for user in users {
-            matrix_client.create_user_if_missing(&user).await?;
+            matrix_client.ensure_user(&user).await?;
         }
     }
 

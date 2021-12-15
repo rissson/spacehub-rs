@@ -4,10 +4,13 @@ use color_eyre::eyre::{ErrReport, Result};
 use matrix_sdk::{
     ruma::{
         api::{
-            client::{error as ruma_api_client_error, r0::profile},
+            client::{
+                error as ruma_api_client_error,
+                r0::{alias, profile, room},
+            },
             error as ruma_api_error,
         },
-        UserId,
+        RoomAliasId, RoomId, UserId,
     },
     Client, ClientConfig, HttpError, RequestConfig,
 };
@@ -54,7 +57,7 @@ impl MatrixClient {
         Ok(profile.is_some())
     }
 
-    pub async fn create_user_if_missing(&self, user: &UserMetadata) -> Result<()> {
+    pub async fn ensure_user(&self, user: &UserMetadata) -> Result<()> {
         let user_id = UserId::try_from(user.mxid.clone())?;
         if self.user_exists(&user_id).await? {
             return Ok(());
@@ -77,31 +80,47 @@ impl MatrixClient {
         Ok(())
     }
 
-    pub async fn get_room_by_id(&self, room_id: &str) -> Result<Option<String>> {
+    async fn create_room(&self) -> Result<RoomId> {
         todo!();
     }
 
-    pub async fn get_room_by_alias(&self, room_alias: &str) -> Result<Option<String>> {
-        todo!();
-    }
-
-    pub async fn create_room(
+    pub async fn ensure_room(
         &self,
-        alias: &str,
+        room_id_s: Option<&String>,
+        alias: Option<&String>,
         visibility: &str,
         is_space: bool,
         parent: Option<&str>,
     ) -> Result<String> {
-        todo!()
-    }
+        let room_id: RoomId;
+        let room_alias_id: RoomAliasId;
 
-    pub async fn update_room(
-        &self,
-        room_id: &str,
-        extra_aliases: &[String],
-        visibility: &str,
-        parent: Option<&str>,
-    ) -> Result<()> {
+        if !room_id_s.is_some() {
+            room_alias_id = RoomAliasId::try_from(alias.unwrap().clone())?;
+
+            // Check if the alias is associated with a room
+            let alias_request = alias::get_alias::Request::new(&room_alias_id);
+            let room = match self
+                .client
+                .send(alias_request, Some(RequestConfig::new().force_auth()))
+                .await
+            {
+                Err(HttpError::ClientApi(ruma_api_error::FromHttpResponseError::Http(
+                    ruma_api_error::ServerError::Known(e),
+                ))) if e.kind == ruma_api_client_error::ErrorKind::NotFound => None,
+                Err(e) => return Err(ErrReport::try_from(e)?),
+                Ok(room) => Some(room),
+            };
+
+            // If it does, store its ID, otherwise, create it
+            room_id = match room {
+                Some(room) => room.room_id,
+                None => self.create_room().await?,
+            };
+        }
+
+        // We now have a room
+
         todo!();
     }
 
@@ -118,7 +137,7 @@ impl MatrixClient {
         todo!();
     }
 
-    pub async fn set_user_powerlevel(
+    pub async fn ensure_user_powerlevel(
         &self,
         room_id: &str,
         user_id: &str,

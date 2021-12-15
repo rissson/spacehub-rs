@@ -38,10 +38,8 @@ struct LdapGroupMetadata {
 pub struct RoomMetadata {
     pub id: Option<String>,
     pub alias: Option<String>,
-    extra_aliases: Vec<String>,
     visibility: String,
     ldap_groups: Vec<LdapGroupMetadata>,
-    admins: Vec<String>,
     users: HashSet<UserMetadata>,
     is_space: bool,
 }
@@ -116,39 +114,24 @@ impl RoomMetadata {
         }
     }
 
-    async fn create_or_update(
-        &self,
-        parent: Option<&str>,
-        matrix_client: &MatrixClient,
-    ) -> Result<String> {
-        // Create the room
-        let room_id;
-        if self.id.is_some() {
-            // TODO get_room_by_id
-            room_id = self.id.as_ref().unwrap().clone();
-            let _ = matrix_client.get_room_by_id(&room_id).await?;
-        } else {
-            let _room_id = matrix_client
-                .get_room_by_alias(self.alias.as_ref().unwrap())
-                .await?;
-            if _room_id.is_some() {
-                room_id = _room_id.unwrap();
-            } else {
-                room_id = matrix_client
-                    .create_room(
-                        self.alias.as_ref().unwrap(),
-                        &self.visibility,
-                        self.is_space,
-                        parent,
-                    )
-                    .await?;
-            }
-        }
+    async fn ensure(&self, parent: Option<&str>, matrix_client: &MatrixClient) -> Result<String> {
+        info!(
+            "Processing room {} {}",
+            self.id.as_ref().unwrap_or(&String::new()),
+            self.alias.as_ref().unwrap_or(&String::new())
+        );
 
-        matrix_client
-            .update_room(&room_id, &self.extra_aliases, &self.visibility, parent)
+        let room_id = matrix_client
+            .ensure_room(
+                self.id.as_ref(),
+                self.alias.as_ref(),
+                &self.visibility,
+                self.is_space,
+                parent,
+            )
             .await?;
 
+        info!("Processing users for room {}", room_id);
         // Find what users we need to add, remove, and update the power level
         let current_users = matrix_client.get_room_members(&room_id).await?;
         let mut users_to_add = HashSet::new();
@@ -181,12 +164,15 @@ impl RoomMetadata {
                 .remove_user_from_room(&room_id, user_id)
                 .await?;
         }
+
+        info!("Processing power levels for room {}", room_id);
         for user in &self.users {
             matrix_client
-                .set_user_powerlevel(&room_id, &user.mxid, user.power_level)
+                .ensure_user_powerlevel(&room_id, &user.mxid, user.power_level)
                 .await?;
         }
 
+        info!("Finished processing room {}", room_id);
         Ok(room_id.clone())
     }
 }
@@ -385,15 +371,31 @@ impl SpaceFolder {
         matrix_client: &MatrixClient,
         parent: Option<&'async_recursion str>,
     ) -> Result<()> {
+        info!(
+            "Processing space {} {}",
+            self.metadata
+                .as_ref()
+                .unwrap()
+                .id
+                .as_ref()
+                .unwrap_or(&String::new()),
+            self.metadata
+                .as_ref()
+                .unwrap()
+                .alias
+                .as_ref()
+                .unwrap_or(&String::new())
+        );
+
         let room_id = self
             .metadata
             .as_ref()
             .unwrap()
-            .create_or_update(parent, matrix_client)
+            .ensure(parent, matrix_client)
             .await?;
 
         for room in &self.rooms {
-            let _room_id = room.create_or_update(parent, matrix_client).await?;
+            let _room_id = room.ensure(parent, matrix_client).await?;
         }
 
         for child in &self.children {
